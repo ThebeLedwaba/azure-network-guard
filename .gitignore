@@ -1,0 +1,11 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.db
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+crash.log
