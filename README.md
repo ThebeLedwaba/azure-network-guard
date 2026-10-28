@@ -1,26 +1,31 @@
 # Network Guard - Secure Azure Infrastructure
 
-## 1. Project Overview
-Network Guard is a secure, cloud-native Python (FastAPI) backend designed with a Zero-Trust architecture. The project demonstrates a full-stack approach to cloud security, combining a robust API with Infrastructure as Code (IaC) to provision a fully isolated Azure environment.
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Azure](https://img.shields.io/badge/Microsoft_Azure-VNet%20%7C%20SQL-0089D6?style=flat&logo=microsoftazure&logoColor=white)](https://azure.microsoft.com/)
+[![Terraform](https://img.shields.io/badge/Terraform-IaC-7B42BC?style=flat&logo=terraform&logoColor=white)](https://www.terraform.io/)
 
-**Core Technologies:**
-- **Backend:** Python 3.11, FastAPI, SQLAlchemy
-- **Security:** JWT (JSON Web Tokens), Bcrypt password hashing
-- **Cloud Infrastructure:** Microsoft Azure (VNet, App Service, Azure SQL)
+## 1. Project Overview
+**Network Guard** is a secure, cloud-native Python (FastAPI) backend designed with a **Zero-Trust architecture**. The project demonstrates an end-to-end cloud engineering approach combining a robust RESTful authentication API with Infrastructure as Code (IaC) to provision a completely isolated Azure networking and database environment.
+
+### Core Technologies
+- **Backend Framework:** Python 3.11, FastAPI, SQLAlchemy
+- **Security & Auth:** JWT (JSON Web Tokens), Bcrypt password hashing
+- **Cloud Infrastructure:** Microsoft Azure (Virtual Network, App Service, Azure SQL)
 - **Infrastructure as Code:** Terraform
-- **Networking:** Private Endpoints, Private DNS Zones, VNet Integration
+- **Networking & Isolation:** Private Endpoints, Private DNS Zones, VNet Integration
 
 ---
 
 ## 2. Architecture Design
 
-The architecture follows a strict Zero-Trust model. The Azure SQL Database is completely locked from the public internet (`public_network_access_enabled = false`). It can only be accessed via a Private Endpoint located inside the Virtual Network.
+The architecture enforces a strict **Zero-Trust model**. The Azure SQL Database is completely isolated from the public internet (`public_network_access_enabled = false`). Database traffic is routed exclusively through a Private Endpoint inside the Virtual Network.
 
-### 2.1 Deployment Diagram (UML)
+### 2.1 Network Topology Diagram
 
 ```mermaid
 graph TD
-    Client[Client / Internet] -->|HTTPS| AppService[Azure App Service\n(Python FastAPI)]
+    Client[Client / Public Internet] -->|HTTPS| AppService[Azure App Service\nFastAPI Backend]
     
     subgraph Azure VNet ["Azure Virtual Network (10.0.0.0/16)"]
         subgraph AppSubnet ["snet-app (10.0.1.0/24)"]
@@ -33,18 +38,16 @@ graph TD
         
         DNS[Private DNS Zone\nprivatelink.database.windows.net]
     end
-    
-    AppService -->|Private DNS Resolution| DNS
-    AppService -->|Private Connection| PE
-    PE -->|Internal Traffic| SQL[(Azure SQL Database\nPublic Access Disabled)]
+### 2.2 Authentication Flow Sequence
 sequenceDiagram
-    participant User
+    autonumber
+    actor User
     participant API as FastAPI (App Service)
-    participant Auth as Auth Module (JWT)
-    participant DB as Azure SQL (Private)
+    participant Auth as Auth Module (JWT/Bcrypt)
+    participant DB as Azure SQL (Private Endpoint)
 
     User->>API: POST /register (email, password)
-    API->>Auth: Hash password (bcrypt)
+    API->>Auth: Hash password (Bcrypt)
     Auth-->>API: Hashed Password
     API->>DB: INSERT INTO users
     DB-->>API: Success
@@ -54,87 +57,88 @@ sequenceDiagram
     API->>DB: SELECT * FROM users WHERE email=?
     DB-->>API: User Record (Hashed Password)
     API->>Auth: Verify Password
-    Auth-->>API: Valid
+    Auth-->>API: Valid Match
     API->>Auth: Generate JWT Token
-    Auth-->>API: Access Token
-    API-->>User: 200 OK (JWT Token)
+    Auth-->>API: Signed Access Token
+    API-->>User: 200 OK (JWT Bearer Token)
 
-    User->>API: GET /secure-data (Bearer Token)
-    API->>Auth: Validate Token
-    Auth-->>API: Valid
-    API-->>User: 200 OK (Secure Data)
-   3. Infrastructure as Code (Terraform)
-The entire Azure environment is provisioned using Terraform. The configuration is located in the terraform/ directory.
+    User->>API: GET /secure-data (Header: Bearer Token)
+    API->>Auth: Validate Token Signature
+    Auth-->>API: Token Valid
+    API-->>User: 200 OK (Protected Payload)
+### 3. Infrastructure as Code (Terraform)
+The complete Azure cloud environment is fully codified using Terraform under the terraform/ directory.
 
 Resources Provisioned:
-
 Resource Group: rg-network-guard
 
-Virtual Network: vnet-network-guard (Address space: 10.0.0.0/16)
+Virtual Network: vnet-network-guard (10.0.0.0/16)
 
 Subnets:
 
-snet-app (Delegated to Microsoft.Web/serverFarms)
+snet-app (10.0.1.0/24) — Delegated to Microsoft.Web/serverFarms for App Service VNet Integration.
 
-snet-private-endpoint (Hosts the Private Endpoint)
+snet-private-endpoint (10.0.2.0/24) — Hosts the Azure SQL Private Endpoint.
 
-Azure SQL Server & Database: Basic tier, public access disabled.
+Azure SQL Server & Database: Basic tier, public network access explicitly disabled.
 
-Private Endpoint: Connects the SQL database securely to the VNet.
+Private Endpoint: Secures connection to the SQL database without exposing public IP routes.
 
-Private DNS Zone: privatelink.database.windows.net for internal resolution.
+Private DNS Zone: privatelink.database.windows.net linked to the VNet for internal name resolution.
 
-App Service Plan: Linux, Python 3.11 (Configured for B1 tier to support VNet integration).
+App Service Plan: Linux-based, configured for VNet Integration.
 
-4. Cloud Constraints (Azure for Students)
-While the infrastructure is fully codified in Terraform, live deployment of the Web App was restricted due to Azure for Students subscription quota limits:
+### 4. Cloud Deployment Constraints (Subscription Policy Note)
+While the entire infrastructure stack is fully codified and validated in Terraform, live provisioning of the Azure Web App VNet integration encountered regional subscription quotas under Azure for Students:
 
-The F1 (Free) App Service tier does not support VNet Integration.
+The F1 (Free) App Service SKU does not support VNet Integration.
 
-The B1 (Basic) tier quota increase was blocked by the student subscription policy.
+Upgrading to the B1 (Basic) tier requires core quota increases blocked by regional student subscription limits.
 
-The Terraform code represents a production-ready architecture. To deploy this in a standard enterprise environment with sufficient quotas, run terraform apply in the terraform directory.
+Note: The Terraform code in terraform/ is production-ready. In a standard corporate/enterprise subscription with standard quotas, running terraform apply provisions the entire isolated network seamlessly.
 
-5. Local Development Guide
-To run the Python API locally without Azure dependencies:
+### 5. Local Development Guide
+To run and test the FastAPI authentication backend locally:
 
-Clone the repository:
-
-bash
-git clone https://github.com/YOUR_USERNAME/network-guard.git
+1. Clone the Repository
+Bash
+git clone [https://github.com/YOUR_USERNAME/network-guard.git](https://github.com/YOUR_USERNAME/network-guard.git)
 cd network-guard
-Create and activate a virtual environment:
-
-bash
+2. Set Up Virtual Environment
+Bash
+# Create virtual environment
 python -m venv venv
-# Windows:
-source venv/Scripts/activate
-# Mac/Linux:
+
+# Activate on Windows:
+venv\Scripts\activate
+
+# Activate on Linux/macOS:
 source venv/bin/activate
-Install dependencies:
-
-bash
+3. Install Dependencies
+Bash
 pip install -r requirements.txt
-Run the FastAPI server:
-
-bash
+4. Run the Application
+Bash
 uvicorn app.main:app --reload
-Access the Swagger UI to test the endpoints:
-Navigate to http://127.0.0.1:8000/docs
+5. Interactive API Documentation
+Once running, access the interactive Swagger UI at:
+http://127.0.0.1:8000/docs
 
-6. Repository Structure
-text
+### 6. Repository Structure
 network-guard/
 ├── app/
 │   ├── __init__.py
-│   ├── auth.py
-│   ├── database.py
-│   ├── main.py
-│   └── models.py
+│   ├── auth.py         # JWT generation & Bcrypt hashing logic
+│   ├── database.py     # SQLAlchemy DB connection session setup
+│   ├── main.py         # FastAPI routes and endpoints
+│   └── models.py       # DB Schema models
 ├── terraform/
-│   ├── main.tf
-│   ├── providers.tf
-│   └── variables.tf
+│   ├── main.tf         # Azure provider resources, VNet, SQL, Private Endpoint
+│   ├── providers.tf    # Terraform & AzureRM provider configuration
+│   └── variables.tf    # Variable definitions (regions, CIDRs, credentials)
 ├── .gitignore
 ├── README.md
-└── requirements.txt 
+└── requirements.txt
+    AppService -->|Private DNS Resolution| DNS
+    AppService -->|VNet Integration| PE
+    PE -->|Internal Network Traffic| SQL[(Azure SQL Database\nPublic Access Disabled)]
